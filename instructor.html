@@ -49,7 +49,7 @@ function loginView(msg) {
   $('pin').onkeydown = function (e) { if (e.key === 'Enter') go(); };
   $('go').onclick = go;
 }
-function go() { var p = $('pin').value.trim(); if (!p) return; load(p); }
+function go() { var p = $('pin').value.replace(/\D/g, ''); if (!p) return; load(p); }
 function load(pin) {
   $('app').innerHTML = '<div class="card mut">Loading your schedule…</div>';
   api('instructorLogin', { pin: pin }).then(function (j) { ls('insPin', pin); show(j); }).catch(function (e) { ls('insPin', null); loginView(e.message); });

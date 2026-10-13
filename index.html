@@ -174,7 +174,7 @@ function renderLogin(msg) {
   $('lgBtn').onclick = doLogin;
 }
 function doLogin() {
-  var pin = $('lgPin').value.trim(), name = $('lgName').value.trim();
+  var pin = $('lgPin').value.replace(/\D/g, ''), name = $('lgName').value.trim();
   if (!name) return toast('Enter your name', true);
   var b = $('lgBtn'); busy(b, true);
   S.pin = pin; S.user = name;
