@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MJSR Instructor Schedule</title>
+<style>
+:root{--navy:#1B2C4D;--gold:#B8922E;--gold-l:#f6efdf;--bg:#f5f6f8;--line:#e2e5eb;--mut:#6b7385;--bad:#b3261e;--bad-l:#fde7e5}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--navy);font-family:Arial,Helvetica,sans-serif;font-size:15px}
+button,input{font-family:inherit;font-size:15px}
+header{background:var(--navy);color:#fff;border-bottom:3px solid var(--gold);padding:14px 16px;display:flex;align-items:center;gap:10px}
+header b{font-size:16px}
+header small{display:block;color:#c9cfdb;font-size:11px;letter-spacing:1px;text-transform:uppercase}
+header button{margin-left:auto;background:none;border:1px solid #c9cfdb;color:#fff;border-radius:6px;padding:6px 10px;cursor:pointer}
+main{max-width:640px;margin:0 auto;padding:14px}
+.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.day{font-weight:bold;margin:16px 4px 8px;font-size:14px}
+.day.today{color:var(--gold)}
+.les{border-left:4px solid var(--gold);background:#fff;border-radius:8px;border-top:1px solid var(--line);border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:10px 12px;margin-bottom:8px}
+.les .t{font-size:18px;font-weight:bold}
+.les .m{color:var(--mut);font-size:13px;margin-top:2px}
+.chip{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;background:var(--gold-l)}
+.chip.snb{background:#e8eef8}
+input{border:1px solid #cdd2db;border-radius:7px;padding:12px;width:100%;font-size:20px;letter-spacing:6px;text-align:center}
+.btn{background:var(--gold);color:#fff;border:0;border-radius:8px;padding:13px;width:100%;font-weight:bold;margin-top:12px;cursor:pointer}
+.err{background:var(--bad-l);color:var(--bad);padding:10px;border-radius:7px;margin-top:10px}
+.mut{color:var(--mut)}
+.off{background:repeating-linear-gradient(45deg,#f1f2f5,#f1f2f5 6px,#e6e8ec 6px,#e6e8ec 12px);border-radius:8px;padding:10px 12px;margin-bottom:8px;color:var(--mut)}
+</style>
+</head>
+<body>
+<header><div><b>MJSR Ski School</b><small>Instructor schedule</small></div><button id="out" style="display:none">Log out</button></header>
+<main id="app"></main>
+<script>
+var API = 'https://script.google.com/macros/s/AKfycbxMk8x48YFEaXKrtZrDvaQ-Hf2EgjyB5UP6PadGhGq2E0ATGRl1dI5FWhpk6zau6e6N4g/exec';
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } }
+function nice(d) { var p = d.split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2], 12)).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }); }
+function api(action, data) {
+  return fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ action: action }, data || {})) })
+    .then(function (r) { return r.json(); }).then(function (j) { if (!j.ok) throw new Error(j.error || 'Something went wrong'); return j; });
+}
+function loginView(msg) {
+  $('out').style.display = 'none';
+  $('app').innerHTML = '<div class="card"><h2 style="margin-top:0">Enter your instructor PIN</h2><input id="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="off"><button class="btn" id="go">View my lessons</button>' + (msg ? '<div class="err">' + esc(msg) + '</div>' : '') + '<p class="mut" style="font-size:13px">Your PIN is given to you by the Ski School lead. Do not share it.</p></div>';
+  $('pin').focus();
+  $('pin').onkeydown = function (e) { if (e.key === 'Enter') go(); };
+  $('go').onclick = go;
+}
+function go() { var p = $('pin').value.trim(); if (!p) return; load(p); }
+function load(pin) {
+  $('app').innerHTML = '<div class="card mut">Loading your schedule…</div>';
+  api('instructorLogin', { pin: pin }).then(function (j) { ls('insPin', pin); show(j); }).catch(function (e) { ls('insPin', null); loginView(e.message); });
+}
+function show(j) {
+  $('out').style.display = 'block';
+  var i = j.instructor;
+  var h = '<div class="card"><b style="font-size:17px">' + esc(i.Name) + '</b>' + (i.Role === 'Lead' ? ' <span class="chip">Ski School lead</span>' : '') + '<div class="mut" style="font-size:13px;margin-top:4px">' + esc(i.Type) + ' · up to ' + esc(i.MaxStudents) + ' students · ' + esc(i.Levels.join(', ') || 'No lessons set yet') + '</div><div class="mut" style="font-size:13px;margin-top:4px">Meeting point, <b>' + esc(j.meetingPoint) + '</b></div></div>';
+  var days = {};
+  j.bookings.forEach(function (b) {
+    [b.Date].concat(b.Day2Date ? [b.Day2Date] : []).forEach(function (d, idx) {
+      if (d < j.today) return;
+      var k = [b.StartTime, b.ProductName, b.Discipline, b.Level].join('|');
+      days[d] = days[d] || {};
+      var g = days[d][k] = days[d][k] || { start: b.StartTime, end: b.EndTime, product: b.ProductName, disc: b.Discipline, level: b.Level, qty: 0, guests: [], day2: idx === 1, notes: [] };
+      g.qty += Number(b.Qty); g.guests.push(b.CustomerName + ' (' + b.Qty + ')'); if (b.Notes) g.notes.push(b.Notes);
+    });
+  });
+  var off = {}; j.off.forEach(function (o) { off[o.Date] = o.Reason; });
+  Object.keys(off).forEach(function (d) { if (d >= j.today) days[d] = days[d] || {}; });
+  var keys = Object.keys(days).sort();
+  if (!keys.length) h += '<div class="card mut">No lessons booked for you in the next three weeks.</div>';
+  keys.forEach(function (d) {
+    h += '<div class="day' + (d === j.today ? ' today' : '') + '">' + (d === j.today ? 'Today, ' : '') + esc(nice(d)) + '</div>';
+    if (off[d]) h += '<div class="off">' + esc(off[d]) + '</div>';
+    Object.keys(days[d]).sort().forEach(function (k) {
+      var g = days[d][k];
+      h += '<div class="les"><div class="t">' + esc(g.start) + '–' + esc(g.end) + '</div><div><span class="chip' + (g.disc === 'Snowboard' ? ' snb' : '') + '">' + esc(g.disc + ' ' + g.level) + '</span> <b>' + esc(g.qty) + ' student' + (g.qty > 1 ? 's' : '') + '</b></div><div class="m">' + esc(g.product) + (g.day2 ? ', day 2' : '') + '</div><div class="m">' + esc(g.guests.join(', ')) + '</div>' + (g.notes.length ? '<div class="m">Notes, ' + esc(g.notes.join('; ')) + '</div>' : '') + '</div>';
+    });
+  });
+  h += '<button class="btn" id="rf" style="background:var(--navy)">Refresh</button>';
+  $('app').innerHTML = h;
+  $('rf').onclick = function () { load(ls('insPin')); };
+}
+$('out').onclick = function () { ls('insPin', null); loginView(); };
+var saved = ls('insPin');
+if (saved) load(saved); else loginView();
+</script>
+</body>
+</html>

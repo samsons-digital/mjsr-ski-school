@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Book Ski School, Malam Jabba</title>
+<style>
+:root{--navy:#1B2C4D;--gold:#B8922E;--gold-l:#f6efdf;--bg:#f5f6f8;--line:#e2e5eb;--mut:#6b7385;--bad:#b3261e;--bad-l:#fde7e5;--ok:#2e7d4f;--ok-l:#e3f3e8}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--navy);font-family:Arial,Helvetica,sans-serif;font-size:15px}
+button,input,select{font-family:inherit;font-size:15px;color:inherit}
+header{background:var(--navy);color:#fff;border-bottom:3px solid var(--gold);padding:18px 16px;text-align:center}
+header h1{margin:0;font-size:20px;letter-spacing:.3px}
+header p{margin:4px 0 0;color:#c9cfdb;font-size:13px}
+main{max-width:680px;margin:0 auto;padding:16px}
+.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
+.card h2{margin:0 0 4px;font-size:16px}
+.step{font-size:11px;color:var(--gold);font-weight:bold;letter-spacing:1px;text-transform:uppercase}
+.opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:10px}
+.opt{border:1px solid #cdd2db;border-radius:8px;padding:10px;background:#fff;cursor:pointer;text-align:left}
+.opt b{display:block}
+.opt span{font-size:12px;color:var(--mut)}
+.opt.on{border-color:var(--gold);background:var(--gold-l);outline:2px solid var(--gold)}
+.opt.full{opacity:.45;cursor:not-allowed}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.tabs button{border:1px solid #cdd2db;background:#fff;border-radius:20px;padding:7px 14px;cursor:pointer}
+.tabs button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.fld{display:flex;flex-direction:column;gap:4px;margin-top:10px}
+.fld label{font-size:12px;color:var(--mut);font-weight:bold}
+input,select{border:1px solid #cdd2db;border-radius:7px;padding:10px;width:100%;background:#fff}
+input:focus,select:focus{outline:2px solid var(--gold);border-color:var(--gold)}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row .fld{flex:1;min-width:140px}
+.btn{background:var(--gold);color:#fff;border:0;border-radius:8px;padding:13px 18px;font-weight:bold;cursor:pointer;width:100%;margin-top:14px}
+.btn:disabled{opacity:.5}
+.mut{color:var(--mut)}
+.sum{background:var(--gold-l);border-radius:8px;padding:12px;margin-top:12px;font-size:14px;line-height:1.6}
+.err{background:var(--bad-l);color:var(--bad);padding:10px;border-radius:7px;margin-top:10px;display:none}
+.done{text-align:center}
+.done .id{font-size:26px;font-weight:bold;color:var(--gold);margin:8px 0}
+.hp{position:absolute;left:-5000px;height:0;overflow:hidden}
+.hide{display:none!important}
+footer{text-align:center;font-size:12px;color:var(--mut);padding:10px 16px 30px}
+</style>
+</head>
+<body>
+<header><h1>Malam Jabba Ski School</h1><p>Book lessons, rentals and snow activities</p></header>
+<main id="app"><div class="card mut">Loading…</div></main>
+<footer>Malam Jabba Ski Resort, Swat · Samsons Group</footer>
+<script>
+var API = 'https://script.google.com/macros/s/AKfycbxMk8x48YFEaXKrtZrDvaQ-Hf2EgjyB5UP6PadGhGq2E0ATGRl1dI5FWhpk6zau6e6N4g/exec';
+var LEVELS = [['Beginner', 'Never skied or snowboarded'], ['Intermediate', 'Can turn and stop on green runs'], ['Advanced', 'Confident on all marked runs']];
+var CAT_NAMES = { 'Lesson': 'Ski and snowboard lessons', 'Rental': 'Equipment rental', 'Clothing': 'Clothing rental', 'Snow Activity': 'Snow activities' };
+var D = null, sel = { cat: 'Lesson', pid: '', disc: 'Ski', level: 'Beginner', date: '', qty: 1, start: '' };
+
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function money(n) { return 'Rs ' + Number(n || 0).toLocaleString('en-US'); }
+function api(action, data) {
+  return fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ action: action }, data || {})) })
+    .then(function (r) { return r.json(); }).then(function (j) { if (!j.ok) throw new Error(j.error || 'Something went wrong'); return j; });
+}
+function addDays(d, n) { var p = d.split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2] + n, 12)).toISOString().slice(0, 10); }
+function nice(d) { var p = d.split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2], 12)).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }); }
+function prod() { return D.products.filter(function (p) { return p.ProductID === sel.pid; })[0]; }
+function isLesson(p) { return String(p.NeedsInstructor).toUpperCase() === 'TRUE'; }
+function err(m) { var e = $('err'); if (!e) return; e.textContent = m; e.style.display = m ? 'block' : 'none'; }
+
+function render() {
+  var cats = Object.keys(CAT_NAMES).filter(function (c) { return D.products.some(function (p) { return p.Category === c; }); });
+  var prods = D.products.filter(function (p) { return p.Category === sel.cat; }).sort(function (a, b) { return Number(a.SortOrder) - Number(b.SortOrder); });
+  if (!prods.some(function (p) { return p.ProductID === sel.pid; })) sel.pid = prods.length ? prods[0].ProductID : '';
+  var p = prod();
+  var h = '<div class="card"><div class="step">Step 1</div><h2>What would you like to book?</h2><div class="tabs">' + cats.map(function (c) { return '<button data-c="' + c + '" class="' + (c === sel.cat ? 'on' : '') + '">' + esc(CAT_NAMES[c]) + '</button>'; }).join('') + '</div>' +
+    '<div class="opts">' + prods.map(function (x) { return '<div class="opt' + (x.ProductID === sel.pid ? ' on' : '') + '" data-p="' + x.ProductID + '"><b>' + esc(x.Name) + '</b><span>' + esc(x.Option) + '</span><br><b style="color:var(--gold);display:inline">' + money(x.Price) + '</b></div>'; }).join('') + '</div>' +
+    (p ? '<p class="mut" style="font-size:13px;margin:10px 0 0">' + esc(p.TimesLabel ? p.TimesLabel + '. ' : '') + esc(p.Includes || '') + '</p>' : '') + '</div>';
+  if (p && isLesson(p)) {
+    h += '<div class="card"><div class="step">Step 2</div><h2>Discipline and level</h2><div class="tabs">' + ['Ski', 'Snowboard'].map(function (d) { return '<button data-d="' + d + '" class="' + (d === sel.disc ? 'on' : '') + '">' + d + '</button>'; }).join('') + '</div>' +
+      '<div class="opts">' + LEVELS.map(function (l) { return '<div class="opt' + (l[0] === sel.level ? ' on' : '') + '" data-l="' + l[0] + '"><b>' + l[0] + '</b><span>' + l[1] + '</span></div>'; }).join('') + '</div></div>';
+  }
+  var maxQ = p && isLesson(p) ? Number(p.Capacity || 10) : 20;
+  h += '<div class="card"><div class="step">Step ' + (p && isLesson(p) ? 3 : 2) + '</div><h2>Date and ' + (p && isLesson(p) ? 'number of students' : (p && p.ProductID === 'SA-SHOE' ? 'hours' : 'quantity')) + '</h2><div class="row"><div class="fld"><label>Date</label><input type="date" id="date" min="' + D.today + '" max="' + addDays(D.today, D.maxDaysAhead) + '" value="' + esc(sel.date) + '"></div>' +
+    '<div class="fld"><label>' + (p && isLesson(p) ? 'Students' : (p && p.ProductID === 'SA-SHOE' ? 'Hours' : 'Quantity')) + '</label><select id="qty">' + Array.apply(null, Array(maxQ)).map(function (_, i) { return '<option' + (i + 1 === sel.qty ? ' selected' : '') + '>' + (i + 1) + '</option>'; }).join('') + '</select></div></div>' +
+    (p && isLesson(p) ? '<div id="slots" style="margin-top:12px"></div>' : '') + '</div>';
+  h += '<div class="card"><div class="step">Your details</div><h2>Who is booking?</h2><div class="fld"><label>Full name</label><input id="name" autocomplete="name"></div><div class="row"><div class="fld"><label>Mobile number</label><input id="phone" type="tel" autocomplete="tel" placeholder="03XX XXXXXXX"></div><div class="fld"><label>Email (optional)</label><input id="email" type="email" autocomplete="email"></div></div>' +
+    '<div class="fld"><label>Notes (ages, shoe sizes, anything we should know)</label><input id="notes"></div><div class="hp"><input id="website" tabindex="-1" autocomplete="off"></div>' +
+    '<div class="sum" id="sum"></div><div class="err" id="err"></div><button class="btn" id="go">Confirm booking</button>' +
+    (D.seasonNote ? '<p class="mut" style="font-size:13px;margin-bottom:0">' + esc(D.seasonNote) + '</p>' : '') + '</div>';
+  var keep = { name: $('name') ? $('name').value : '', phone: $('phone') ? $('phone').value : '', email: $('email') ? $('email').value : '', notes: $('notes') ? $('notes').value : '' };
+  $('app').innerHTML = h;
+  Object.keys(keep).forEach(function (k) { $(k).value = keep[k]; });
+  document.querySelectorAll('[data-c]').forEach(function (b) { b.onclick = function () { sel.cat = b.dataset.c; sel.pid = ''; sel.start = ''; sel.qty = 1; render(); }; });
+  document.querySelectorAll('[data-p]').forEach(function (b) { b.onclick = function () { sel.pid = b.dataset.p; sel.start = ''; sel.qty = 1; render(); }; });
+  document.querySelectorAll('[data-d]').forEach(function (b) { b.onclick = function () { sel.disc = b.dataset.d; sel.start = ''; render(); }; });
+  document.querySelectorAll('[data-l]').forEach(function (b) { b.onclick = function () { sel.level = b.dataset.l; sel.start = ''; render(); }; });
+  $('date').onchange = function () { sel.date = this.value; sel.start = ''; loadSlots(); summary(); };
+  $('qty').onchange = function () { sel.qty = Number(this.value); sel.start = ''; loadSlots(); summary(); };
+  $('go').onclick = submit;
+  loadSlots(); summary();
+}
+function loadSlots() {
+  var p = prod(); if (!p || !isLesson(p) || !$('slots')) return;
+  if (!sel.date) { $('slots').innerHTML = '<p class="mut" style="margin:0">Choose a date to see available times.</p>'; return; }
+  $('slots').innerHTML = '<p class="mut" style="margin:0">Checking times…</p>';
+  var req = { productId: sel.pid, discipline: sel.disc, level: sel.level, date: sel.date, qty: sel.qty };
+  api('publicAvailability', req).then(function (j) {
+    if (req.date !== sel.date || req.productId !== sel.pid || req.level !== sel.level || req.discipline !== sel.disc) return;
+    if (!j.slots.length) { $('slots').innerHTML = '<p class="mut" style="margin:0">No lesson times left on this date. Please try another day.</p>'; return; }
+    $('slots').innerHTML = '<label class="mut" style="font-size:12px;font-weight:bold">Start time</label><div class="opts">' + j.slots.map(function (s) { var full = s.seats < sel.qty; return '<div class="opt' + (full ? ' full' : '') + (s.start === sel.start ? ' on' : '') + '" data-t="' + s.start + '"><b>' + s.start + '–' + s.end + '</b><span>' + (full ? (s.seats ? 'Only ' + s.seats + ' place' + (s.seats > 1 ? 's' : '') : 'Fully booked') : 'Available') + '</span></div>'; }).join('') + '</div>';
+    $('slots').querySelectorAll('[data-t]').forEach(function (el) { el.onclick = function () { if (el.classList.contains('full')) return; sel.start = el.dataset.t; $('slots').querySelectorAll('.opt').forEach(function (x) { x.classList.remove('on'); }); el.classList.add('on'); summary(); }; });
+  }).catch(function (e) { $('slots').innerHTML = '<p class="err" style="display:block">' + esc(e.message) + '</p>'; });
+}
+function summary() {
+  var p = prod(); if (!p) return;
+  var lines = ['<b>' + esc(p.Name) + '</b> ' + esc(p.Option)];
+  if (isLesson(p)) lines.push(esc(sel.disc + ', ' + sel.level));
+  lines.push(sel.date ? esc(nice(sel.date)) + (Number(p.Days) === 2 ? ' and the following day' : '') : '<span class="mut">Date not chosen</span>');
+  if (isLesson(p)) lines.push(sel.start ? 'Starts ' + esc(sel.start) : '<span class="mut">Start time not chosen</span>');
+  lines.push(sel.qty + ' × ' + money(p.Price) + ' = <b>' + money(Number(p.Price) * sel.qty) + '</b>, paid at the Ski School desk');
+  $('sum').innerHTML = lines.join('<br>');
+}
+function submit() {
+  err('');
+  var p = prod(); if (!p) return;
+  if (!sel.date) return err('Please choose a date');
+  if (isLesson(p) && !sel.start) return err('Please choose a start time');
+  var name = $('name').value.trim(), phone = $('phone').value.trim();
+  if (name.length < 2) return err('Please enter your full name');
+  if (phone.replace(/\D/g, '').length < 10) return err('Please enter a valid mobile number');
+  var b = $('go'); b.disabled = true; b.textContent = 'Booking…';
+  api('publicBook', { booking: { productId: sel.pid, discipline: sel.disc, level: sel.level, date: sel.date, start: sel.start, qty: sel.qty, customerName: name, phone: phone, email: $('email').value.trim(), notes: $('notes').value.trim(), website: $('website').value } }).then(function (j) {
+    var x = j.booking;
+    $('app').innerHTML = '<div class="card done"><div class="step">Booking confirmed</div><div class="id">' + esc(x.BookingID) + '</div><p>Thank you, ' + esc(x.CustomerName) + '.</p>' +
+      '<div class="sum" style="text-align:left"><b>' + esc(x.ProductName) + '</b><br>' + (x.Discipline ? esc(x.Discipline + ', ' + x.Level) + '<br>' : '') + esc(nice(x.Date)) + (x.StartTime ? ', ' + esc(x.StartTime + '–' + x.EndTime) : '') + '<br>' + esc(x.Qty) + ' booked, total <b>' + money(x.Total) + '</b></div>' +
+      '<p>Please show your booking number at the Ski School desk. Payment is taken on arrival by cash or card.</p>' + (x.StartTime ? '<p><b>Arrive 20 minutes before ' + esc(x.StartTime) + '</b> to collect equipment.</p>' : '') +
+      '<button class="btn" onclick="location.reload()">Make another booking</button></div>';
+    window.scrollTo(0, 0);
+  }).catch(function (e) { b.disabled = false; b.textContent = 'Confirm booking'; err(e.message); loadSlots(); });
+}
+api('publicInit').then(function (j) {
+  D = j;
+  if (!D.products.length) { $('app').innerHTML = '<div class="card">Online booking is not open yet. Please contact the resort.</div>'; return; }
+  if (!D.products.some(function (p) { return p.Category === sel.cat; })) sel.cat = D.products[0].Category;
+  render();
+}).catch(function (e) { $('app').innerHTML = '<div class="card">Booking is unavailable right now. Please try again shortly. (' + esc(e.message) + ')</div>'; });
+</script>
+</body>
+</html>
