@@ -71,7 +71,7 @@ function show(j) {
   var off = {}; j.off.forEach(function (o) { off[o.Date] = o.Reason; });
   Object.keys(off).forEach(function (d) { if (d >= j.today) days[d] = days[d] || {}; });
   var keys = Object.keys(days).sort();
-  if (!keys.length) h += '<div class="card mut">No lessons booked for you in the next three weeks.</div>';
+  if (!keys.length) h += '<div class="card mut">No lessons booked for you in the next 60 days.</div>';
   keys.forEach(function (d) {
     h += '<div class="day' + (d === j.today ? ' today' : '') + '">' + (d === j.today ? 'Today, ' : '') + esc(nice(d)) + '</div>';
     if (off[d]) h += '<div class="off">' + esc(off[d]) + '</div>';
