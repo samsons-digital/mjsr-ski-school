@@ -33,7 +33,7 @@ input{border:1px solid #cdd2db;border-radius:7px;padding:12px;width:100%;font-si
 <header><div><b>MJSR Ski School</b><small>Instructor schedule</small></div><button id="out" style="display:none">Log out</button></header>
 <main id="app"></main>
 <script>
-var API = 'https://script.google.com/macros/s/AKfycbxMk8x48YFEaXKrtZrDvaQ-Hf2EgjyB5UP6PadGhGq2E0ATGRl1dI5FWhpk6zau6e6N4g/exec';
+var API = 'https://script.google.com/macros/s/AKfycbw7I_9Vw3ksTYtNxivyOIhpAG0OheN5Y2NK5EzN20E8FHdJz4uU20eDveK-vghCl-vKmA/exec';
 function $(id) { return document.getElementById(id); }
 function esc(s) { return String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } }
