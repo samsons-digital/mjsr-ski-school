@@ -513,7 +513,7 @@ function rescheduleForm(id) {
   var start = lesson ? '' : b.StartTime;
   if (lesson) $('rsChk').onclick = function () {
     api('availability', { productId: b.ProductID, discipline: b.Discipline, level: $('rsLvl').value, date: $('rsDate').value, qty: Number($('rsQty').value) }).then(function (j) {
-      $('rsSlots').innerHTML = '<div class="slots">' + j.slots.map(function (s) { return '<div class="slot" data-t="' + s.start + '"><b>' + s.start + '</b><span class="mut" style="font-size:11px">' + s.seats + ' places</span></div>'; }).join('') + '</div><p class="mut" style="font-size:12px">Places shown exclude this booking\'s own seats, so the current slot can show one place less.</p>';
+      $('rsSlots').innerHTML = '<div class="slots">' + j.slots.map(function (s) { return '<div class="slot" data-t="' + s.start + '"><b>' + s.start + '</b><span class="mut" style="font-size:11px">' + s.seats + ' places</span></div>'; }).join('') + '</div><p class="mut" style="font-size:12px">Places shown include this booking\'s own students, so its current slot can show fewer places than are really free.</p>';
       $('rsSlots').querySelectorAll('.slot').forEach(function (el) { el.onclick = function () { $('rsSlots').querySelectorAll('.slot').forEach(function (x) { x.classList.remove('on'); }); el.classList.add('on'); start = el.dataset.t; }; });
     }).catch(function (e) { toast(e.message, true); });
   };
@@ -752,7 +752,10 @@ function customerCopy(rental, items, r) {
   var h = '<div class="copy" id="copyBox"><div style="text-align:center;border-bottom:2px solid #1B2C4D;padding-bottom:6px;margin-bottom:8px"><b style="font-size:15px">Malam Jabba Ski Resort (Ski Shop)</b><br>Equipment renting details, customer copy</div>' +
     '<table><tr><td>No.</td><td><b>' + esc(rental.RentalID) + '</b></td><td>Date</td><td>' + esc(rental.Date || S.boot.today) + '</td></tr><tr><td>Name</td><td colspan="3">' + esc(r.customerName) + '</td></tr><tr><td>Cell</td><td>' + esc(r.cellPhone) + '</td><td>NIC held</td><td>' + (r.cnicRetained ? 'Yes' : 'No') + '</td></tr></table>' +
     '<table style="margin-top:8px"><tr><th>S.#</th><th>Items description</th><th>Code</th><th>Qty</th></tr>' + items.map(function (x, i) { return '<tr><td>' + (i + 1) + '</td><td>' + esc((x.item.Type || x.item.CategoryName) + (x.item.Size ? ', size ' + x.item.Size : '') + (x.item.Brand ? ', ' + x.item.Brand : '')) + '</td><td>' + esc(x.code) + '</td><td>1</td></tr>'; }).join('') + '<tr><td colspan="3"><b>Total</b></td><td><b>' + items.length + '</b></td></tr></table>' +
-    '<p style="margin-top:10px">Please return all items to the Ski Shop. Your NIC is returned when every item is back.</p><p style="margin-top:24px">Sales Manager / Supervisor ______________________</p></div>';
+    '<p style="margin-top:10px">Please return all items to the Ski Shop. Your NIC is returned when every item is back.</p>' +
+    '<div style="margin-top:10px;font-size:9.5px;line-height:1.35"><b>Liability release agreement</b><ol style="margin:4px 0 0;padding-left:16px">' + CLAUSES.map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('') + '</ol><p style="margin:4px 0 0"><b>I, the undersigned, have read and understood the rental and release agreement above.</b></p></div>' +
+    '<table style="margin-top:8px"><tr><td style="width:50%;vertical-align:bottom">' + (r.renterSignature ? '<img src="' + r.renterSignature + '" style="height:60px;max-width:100%"><br>' : '<br><br>') + 'Renter signature</td><td style="vertical-align:bottom">' + (r.parentSignature ? '<img src="' + r.parentSignature + '" style="height:60px;max-width:100%"><br>Parent or guardian signature' : '') + '</td></tr></table>' +
+    '<p style="margin-top:18px">Sales Manager / Supervisor ______________________</p></div>';
   openModal('<h2>Customer copy</h2>' + h + '<div class="foot"><button class="btn ghost" onclick="closeModal()">Close</button><button class="btn gold" onclick="printHtml(document.getElementById(\'copyBox\').outerHTML)">Print</button></div>');
 }
 function printHtml(html) { $('printArea').innerHTML = html; document.body.classList.add('printing'); setTimeout(function () { window.print(); document.body.classList.remove('printing'); }, 300); }
@@ -977,15 +980,13 @@ function renderSettings() {
   $('stSave').onclick = function () {
     var btn = this; busy(btn, true);
     var pairs = [['NightSkiing', $('stNight').value], ['MeetingPoint', $('stMeet').value], ['NoShowGraceMins', $('stGrace').value], ['WebMaxDaysAhead', $('stDays').value], ['WebNotice', $('stNotice').value]];
-    pairs.reduce(function (p, kv) { return p.then(function () { return api('saveSetting', { key: kv[0], value: kv[1] }); }); }, Promise.resolve())
-      .then(function () { busy(btn, false); toast('Saved'); refresh(); }).catch(function (e) { busy(btn, false); toast(e.message, true); });
+    api('saveSettings', { pairs: pairs }).then(function () { busy(btn, false); toast('Saved'); refresh(); }).catch(function (e) { busy(btn, false); toast(e.message, true); });
   };
   $('pinSave').onclick = function () {
     var pairs = [['PIN_DESK', $('pinDesk').value.trim()], ['PIN_LEAD', $('pinLead').value.trim()], ['PIN_AUDIT', $('pinAudit').value.trim()]].filter(function (x) { return x[1]; });
     if (!pairs.length) return toast('Nothing to change', true);
     var btn = this; busy(btn, true);
-    pairs.reduce(function (p, kv) { return p.then(function () { return api('saveSetting', { key: kv[0], value: kv[1] }); }); }, Promise.resolve())
-      .then(function () { busy(btn, false); toast('PINs changed'); renderSettings(); }).catch(function (e) { busy(btn, false); toast(e.message, true); });
+    api('saveSettings', { pairs: pairs }).then(function () { busy(btn, false); toast('PINs changed'); renderSettings(); }).catch(function (e) { busy(btn, false); toast(e.message, true); });
   };
 }
 function prodForm(id) {
