@@ -123,8 +123,9 @@ body.busy nav button{pointer-events:none;opacity:.6}
 <div id="printArea"></div>
 
 <script>
-var API = 'https://script.google.com/macros/s/AKfycbw7I_9Vw3ksTYtNxivyOIhpAG0OheN5Y2NK5EzN20E8FHdJz4uU20eDveK-vghCl-vKmA/exec';
+var API = 'https://script.google.com/macros/s/AKfycbxMk8x48YFEaXKrtZrDvaQ-Hf2EgjyB5UP6PadGhGq2E0ATGRl1dI5FWhpk6zau6e6N4g/exec';
 var BOOK_URL = 'https://samsons-digital.github.io/mjsr-ski-school/book.html';
+var INS_URL = 'https://samsons-digital.github.io/mjsr-ski-school/instructor.html';
 var LEVELS = ['Beginner', 'Intermediate', 'Advanced'];
 var CATS = { SKI: 'Skis', SNB: 'Snowboards', SKB: 'Ski boots', SBB: 'Snowboard boots', HLM: 'Helmets', JKT: 'Ski jackets', PNT: 'Ski pants', GOG: 'Goggles', GLV: 'Gloves', POL: 'Ski poles', SKT: 'Ice skates', TUB: 'Snow tubes', SNP: 'Snow play' };
 var ACTIVE = { 'Confirmed': 1, 'Checked In': 1, 'Completed': 1 };
@@ -259,7 +260,6 @@ function graceFlag(b) {
   if (b.Date < n.date) return true;
   return b.Date === n.date && mins(n.hm) > mins(b.StartTime) + g;
 }
-function missingEmails() { return S.boot.instructors.filter(function (i) { return isYes(i.Active) && String(i.Email).indexOf('@') < 0; }); }
 
 /* ============================== DASHBOARD ============================== */
 function renderDash() {
@@ -274,7 +274,6 @@ function renderDash() {
   Object.keys(b.equipmentSummary).forEach(function (k) { var s = b.equipmentSummary[k]; out += s.out; dmg += s.damaged; total += s.total; });
   var oldRentals = b.openRentals.filter(function (r) { return r.Date < today; });
   var flagged = b.bookings.filter(graceFlag);
-  var miss = missingEmails();
   var yesterday = addDays(today, -1);
   var signedY = b.lastSignOff.some(function (r) { return r.Date === yesterday; });
   var webToday = b.bookings.filter(function (x) { return x.Channel === 'Website' && String(x.CreatedAt).slice(0, 10) === today; });
@@ -293,10 +292,8 @@ function renderDash() {
   if (flagged.length) { any = true; h += '<div class="alert warn"><b>' + flagged.length + ' unpaid website booking(s)</b> past start time plus ' + esc(b.settings.NoShowGraceMins || 30) + ' minutes. Release the slot if the guest has not arrived. <button class="btn sm" onclick="S.tab=\'book\';S.bkFilter=\'flag\';renderShell();render()">Review</button></div>'; }
   if (oldRentals.length) { any = true; h += '<div class="alert bad"><b>' + oldRentals.length + ' rental(s) from earlier days still open.</b> Equipment has not been returned. <button class="btn sm" onclick="S.tab=\'recon\';renderShell();render()">Open reconciliation</button></div>'; }
   if (!signedY) { any = true; h += '<div class="alert warn">Reconciliation for <b>' + dayName(yesterday) + '</b> has not been signed off.</div>'; }
-  if (miss.length) { any = true; h += '<div class="alert info"><b>Email to confirm</b> for ' + miss.length + ' instructor(s), so they will not receive booking emails: ' + miss.map(function (i) { return esc(i.Name); }).join(', ') + '</div>'; }
   var noTicks = b.instructors.filter(function (i) { return isYes(i.Active) && !['SkiBeginner', 'SkiIntermediate', 'SkiAdvanced', 'SnbBeginner', 'SnbIntermediate', 'SnbAdvanced'].some(function (k) { return isYes(i[k]); }); });
   if (noTicks.length) { any = true; h += '<div class="alert info"><b>No lessons ticked</b> for ' + noTicks.length + ' instructor(s), so they cannot be booked: ' + noTicks.map(function (i) { return esc(i.Name); }).join(', ') + '</div>'; }
-  if (!b.settings.AlertEmails) { any = true; h += '<div class="alert info"><b>Alert emails to confirm.</b> Add the Ski School desk email in Settings so new web and phone bookings are emailed.</div>'; }
   if (!any) h += '<div class="alert ok">Nothing outstanding.</div>';
   h += '</div>';
 
@@ -453,7 +450,7 @@ function bookingDetail(id) {
     if (b.Status === 'Confirmed') h += '<button class="btn" onclick="bdOp(\'checkin\')">Check in</button>';
     if (b.Status === 'Checked In' || b.Status === 'Confirmed') h += '<button class="btn ghost" onclick="bdOp(\'complete\')">Completed</button><button class="btn ghost" onclick="bdOp(\'noshow\')">No-show</button>';
     if (ACTIVE[b.Status] && b.Status !== 'Completed') h += '<button class="btn ghost" onclick="rescheduleForm(\'' + b.BookingID + '\')">Reschedule</button>';
-    if (b.InstructorID && ACTIVE[b.Status] && can(['lead', 'manager'])) h += '<button class="btn ghost" onclick="reassignForm(\'' + b.BookingID + '\')">Reassign instructor</button><button class="btn ghost" onclick="resendMail(\'' + b.BookingID + '\')">Re-send instructor email</button>';
+    if (b.InstructorID && ACTIVE[b.Status] && can(['lead', 'manager'])) h += '<button class="btn ghost" onclick="reassignForm(\'' + b.BookingID + '\')">Reassign instructor</button><button class="btn ghost" onclick="waBooking(\'' + b.BookingID + '\')">WhatsApp message</button>';
     if (!ACTIVE[b.Status] && can(['lead', 'manager'])) h += '<button class="btn ghost" onclick="bdOp(\'reopen\')">Reopen</button>';
     if (ACTIVE[b.Status]) h += '<button class="btn red" onclick="if(confirmInline(this))bdOp(\'cancel\')">Cancel booking</button>';
     if (!b.InstructorID || b.Category !== 'Lesson') h += '';
@@ -472,7 +469,40 @@ function bdOp(op) {
   if (op === 'notes') data.notes = $('bdNotes').value;
   api('updateBooking', data).then(function (j) { replaceBooking(j.booking); toast('Updated ' + j.booking.BookingID); bookingDetail(j.booking.BookingID); render(); }).catch(function (e) { toast(e.message, true); });
 }
-function resendMail(id) { api('resendInstructorEmail', { bookingId: id }).then(function () { toast('Email sent'); }).catch(function (e) { toast(e.message, true); }); }
+function waBooking(id) {
+  var b = S.boot.bookings.filter(function (x) { return x.BookingID === id; })[0]; if (!b) return;
+  var t = '*MJSR Ski School, lesson ' + b.BookingID + '*\n' + dayName(b.Date) + (b.Day2Date ? ' and ' + dayName(b.Day2Date) : '') + ', ' + b.StartTime + '–' + b.EndTime + '\n' +
+    b.ProductName + ', ' + b.Discipline + ' ' + b.Level + '\n' + 'Instructor: ' + b.InstructorName + '\n' + 'Students: ' + b.Qty + ' (' + b.CustomerName + ')\n' +
+    'Meeting point: ' + (S.boot.settings.MeetingPoint || 'Ski School desk') + '\n' + 'Check your schedule: ' + INS_URL;
+  waShow(t);
+}
+function waDay(d) {
+  var by = {};
+  bookingsOn(d).filter(function (b) { return b.InstructorID && ACTIVE[b.Status]; }).forEach(function (b) {
+    var k = [b.StartTime, b.EndTime, b.ProductName, b.Discipline, b.Level, b.Date === d ? '' : ' (day 2)'].join('|');
+    by[b.InstructorName] = by[b.InstructorName] || {};
+    by[b.InstructorName][k] = (by[b.InstructorName][k] || 0) + Number(b.Qty);
+  });
+  var names = Object.keys(by).sort();
+  if (!names.length) return toast('No lessons booked on this day', true);
+  var t = '*MJSR Ski School lessons, ' + dayName(d) + '*\n';
+  names.forEach(function (n) {
+    t += '\n*' + n + '*\n';
+    Object.keys(by[n]).sort().forEach(function (k) { var p = k.split('|'); t += p[0] + '–' + p[1] + '  ' + p[2] + ', ' + p[3] + ' ' + p[4] + p[5] + ', ' + by[n][k] + ' student' + (by[n][k] > 1 ? 's' : '') + '\n'; });
+  });
+  t += '\nMeeting point: ' + (S.boot.settings.MeetingPoint || 'Ski School desk') + '\nCheck your schedule: ' + INS_URL;
+  waShow(t);
+}
+function waShow(t) {
+  openModal('<h2>WhatsApp message</h2><p class="mut">Copy this into the instructor WhatsApp group, or open WhatsApp with it ready to send.</p><textarea id="waText" rows="12" style="font-family:Arial;font-size:13px">' + esc(t) + '</textarea>' +
+    '<div class="foot"><button class="btn ghost" onclick="closeModal()">Close</button><button class="btn" id="waCopy">Copy text</button><a class="btn green" style="text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(t) + '">Open WhatsApp</a></div>');
+  $('waCopy').onclick = function () {
+    var v = $('waText').value;
+    var done = function () { toast('Copied, paste it into the WhatsApp group'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v).then(done, function () { $('waText').select(); document.execCommand('copy'); done(); });
+    else { $('waText').select(); document.execCommand('copy'); done(); }
+  };
+}
 function rescheduleForm(id) {
   var b = S.boot.bookings.filter(function (x) { return x.BookingID === id; })[0];
   var p = prod(b.ProductID), lesson = isYes(p.NeedsInstructor);
@@ -518,7 +548,7 @@ function renderCalendar() {
     '<button class="btn ghost" id="cdPrev">Previous day</button><button class="btn ghost" id="cdNext">Next day</button><button class="btn ghost" id="cdToday">Today</button>' +
     '<div class="fld" style="max-width:160px"><label>View</label><select id="cdView"><option value="day">Day</option><option value="week">Week</option></select></div>' +
     '<div class="fld" style="max-width:200px"><label>Instructors</label><select id="cdWho"><option value="active">All active</option><option value="busy">Teaching only</option></select></div>' +
-    (can(['desk', 'lead', 'manager']) ? '<button class="btn gold" id="cdNew">New booking</button>' : '') + '</div></div><div id="cdBody"></div>' +
+    (can(['desk', 'lead', 'manager']) ? '<button class="btn gold" id="cdNew">New booking</button><button class="btn green" id="cdWa">WhatsApp day message</button>' : '') + '</div></div><div id="cdBody"></div>' +
     (can(['lead', 'manager']) ? '<div class="card"><h2>Days off</h2><div class="row"><div class="fld"><label>Instructor</label><select id="uaIns">' + S.boot.instructors.filter(function (i) { return isYes(i.Active); }).map(function (i) { return '<option value="' + i.InstructorID + '">' + esc(i.Name) + '</option>'; }).join('') + '</select></div><div class="fld" style="max-width:180px"><label>Date</label><input type="date" id="uaDate" value="' + S.date + '"></div><div class="fld"><label>Reason</label><input id="uaReason" placeholder="Day off, sick, training"></div><button class="btn" id="uaAdd">Add day off</button></div><div id="uaList" style="margin-top:12px"></div></div>' : '');
   $('app').innerHTML = h;
   $('cdView').value = S.calView || 'day';
@@ -530,6 +560,7 @@ function renderCalendar() {
   $('cdView').onchange = function () { S.calView = this.value; drawCal(); };
   $('cdWho').onchange = drawCal;
   if ($('cdNew')) $('cdNew').onclick = function () { bookingForm({ date: S.date }); };
+  if ($('cdWa')) $('cdWa').onclick = function () { waDay(S.date); };
   if ($('uaAdd')) { $('uaAdd').onclick = addDayOff; drawDaysOff(); }
   drawCal();
 }
@@ -900,7 +931,7 @@ function renderInstructors() {
     '<p class="mut" style="font-size:12px">Ticks control which lessons each instructor can be booked for. B beginner, I intermediate, A advanced. Course scores are for reference only.</p>' +
     '<div class="tbl"><table class="ticks"><tr><th style="text-align:left">Name</th><th>Type</th>' + TICKS.map(function (t) { return '<th>' + t[1] + '</th>'; }).join('') + '<th>Max</th><th>Scores</th><th style="text-align:left">Email</th>' + (mgr ? '<th>PIN</th><th></th>' : '') + '</tr>' +
     list.map(function (i) {
-      return '<tr style="' + (isYes(i.Active) ? '' : 'opacity:.5') + '"><td style="text-align:left"><b>' + esc(i.Name) + '</b>' + (i.Role === 'Lead' ? ' <span class="chip c-info">Lead</span>' : '') + (isYes(i.Active) ? '' : ' <span class="chip c-mut">Inactive</span>') + '</td><td>' + esc(i.Type) + '</td>' + TICKS.map(function (t) { return '<td>' + (isYes(i[t[0]]) ? '<span style="color:var(--ok);font-weight:bold">✓</span>' : '<span class="mut">·</span>') + '</td>'; }).join('') + '<td>' + esc(i.MaxStudents) + '</td><td style="font-size:11px">' + esc((i.SkiScore ? 'Ski ' + i.SkiScore : '') + (i.SnbScore ? ' SNB ' + i.SnbScore : '')) + '</td><td style="text-align:left">' + (String(i.Email).indexOf('@') > 0 ? esc(i.Email) : '<span class="chip c-warn">Email to confirm</span>') + '</td>' + (mgr ? '<td>' + esc(i.PIN) + '</td><td><button class="btn sm ghost" onclick="insForm(\'' + i.InstructorID + '\')">Edit</button></td>' : '') + '</tr>';
+      return '<tr style="' + (isYes(i.Active) ? '' : 'opacity:.5') + '"><td style="text-align:left"><b>' + esc(i.Name) + '</b>' + (i.Role === 'Lead' ? ' <span class="chip c-info">Lead</span>' : '') + (isYes(i.Active) ? '' : ' <span class="chip c-mut">Inactive</span>') + '</td><td>' + esc(i.Type) + '</td>' + TICKS.map(function (t) { return '<td>' + (isYes(i[t[0]]) ? '<span style="color:var(--ok);font-weight:bold">✓</span>' : '<span class="mut">·</span>') + '</td>'; }).join('') + '<td>' + esc(i.MaxStudents) + '</td><td style="font-size:11px">' + esc((i.SkiScore ? 'Ski ' + i.SkiScore : '') + (i.SnbScore ? ' SNB ' + i.SnbScore : '')) + '</td><td style="text-align:left">' + (String(i.Email).indexOf('@') > 0 ? esc(i.Email) : '<span class="mut">None</span>') + '</td>' + (mgr ? '<td>' + esc(i.PIN) + '</td><td><button class="btn sm ghost" onclick="insForm(\'' + i.InstructorID + '\')">Edit</button></td>' : '') + '</tr>';
     }).join('') + '</table></div></div>';
   if (mgr) h += '<div class="card"><h2>Instructor page</h2><p>Each instructor logs in to <b>instructor.html</b> with their own PIN to see their lessons. Share the PIN with the instructor only.</p></div>';
   $('app').innerHTML = h;
@@ -934,7 +965,6 @@ function renderSettings() {
   var h = '<div class="card"><h2>Operations</h2><div class="grid2">' +
     '<div class="fld"><label>Night skiing</label><select id="stNight"><option value="No">Off</option><option value="Yes"' + (isYes(st.NightSkiing) ? ' selected' : '') + '>On (opens night start times)</option></select></div>' +
     '<div class="fld"><label>Meeting point (shown to instructors)</label><input id="stMeet" value="' + esc(st.MeetingPoint) + '"></div>' +
-    '<div class="fld"><label>Alert emails for web and phone bookings (comma separated)</label><input id="stAlert" value="' + esc(st.AlertEmails) + '"></div>' +
     '<div class="fld"><label>Grace minutes before unpaid web bookings are flagged</label><input id="stGrace" type="number" value="' + esc(st.NoShowGraceMins) + '"></div>' +
     '<div class="fld"><label>Web bookings open up to (days ahead)</label><input id="stDays" type="number" value="' + esc(st.WebMaxDaysAhead) + '"></div>' +
     '<div class="fld"><label>Public page notice</label><input id="stNotice" value="' + esc(st.WebNotice) + '"></div></div>' +
@@ -946,7 +976,7 @@ function renderSettings() {
   $('app').innerHTML = h;
   $('stSave').onclick = function () {
     var btn = this; busy(btn, true);
-    var pairs = [['NightSkiing', $('stNight').value], ['MeetingPoint', $('stMeet').value], ['AlertEmails', $('stAlert').value], ['NoShowGraceMins', $('stGrace').value], ['WebMaxDaysAhead', $('stDays').value], ['WebNotice', $('stNotice').value]];
+    var pairs = [['NightSkiing', $('stNight').value], ['MeetingPoint', $('stMeet').value], ['NoShowGraceMins', $('stGrace').value], ['WebMaxDaysAhead', $('stDays').value], ['WebNotice', $('stNotice').value]];
     pairs.reduce(function (p, kv) { return p.then(function () { return api('saveSetting', { key: kv[0], value: kv[1] }); }); }, Promise.resolve())
       .then(function () { busy(btn, false); toast('Saved'); refresh(); }).catch(function (e) { busy(btn, false); toast(e.message, true); });
   };
