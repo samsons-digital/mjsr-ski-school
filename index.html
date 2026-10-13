@@ -65,6 +65,14 @@ th{background:var(--gold-l);font-size:12px;white-space:nowrap}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 16px;border-radius:6px;display:none;z-index:200;max-width:90%;border-left:4px solid var(--gold)}
 #toast.err{background:var(--bad);border-left-color:#fff}
 .login{max-width:380px;margin:60px auto}
+#loadbar{position:fixed;top:0;left:0;right:0;height:4px;z-index:300;display:none;overflow:hidden;background:rgba(184,146,46,.25)}
+#loadbar:before{content:'';position:absolute;top:0;bottom:0;width:35%;background:var(--gold);animation:lb 1s linear infinite}
+@keyframes lb{0%{left:-35%}100%{left:100%}}
+body.busy{cursor:progress}
+body.busy .btn:not(:disabled){opacity:.55;pointer-events:none}
+body.busy nav button{pointer-events:none;opacity:.6}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;margin-right:6px;vertical-align:-2px;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
 .cal{position:relative;overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:#fff}
 .calgrid{position:relative;min-width:900px}
 .calhead{display:flex;position:sticky;top:0;background:var(--gold-l);font-size:11px;font-weight:bold;border-bottom:1px solid var(--line)}
@@ -111,6 +119,7 @@ th{background:var(--gold-l);font-size:12px;white-space:nowrap}
 <main id="app"></main>
 <div class="modal-bg" id="modalBg"><div class="modal" id="modal"></div></div>
 <div id="toast"></div>
+<div id="loadbar"></div>
 <div id="printArea"></div>
 
 <script>
@@ -147,13 +156,35 @@ function dayName(d) { var p = d.split('-'); return new Date(Date.UTC(+p[0], +p[1
 function can(roles) { return roles.indexOf(S.role) >= 0; }
 function isYes(v) { return String(v).toUpperCase() === 'TRUE' || String(v).toUpperCase() === 'YES'; }
 
+/* every server call shows the loading bar, greys all buttons and marks the button that was pressed */
+var LOAD = { n: 0, lastBtn: null, lastT: 0 };
+document.addEventListener('click', function (e) { var b = e.target.closest ? e.target.closest('button') : null; if (b) { LOAD.lastBtn = b; LOAD.lastT = Date.now(); } }, true);
+function loadStart() {
+  LOAD.n++;
+  document.body.classList.add('busy');
+  $('loadbar').style.display = 'block';
+  var b = LOAD.lastBtn;
+  if (b && Date.now() - LOAD.lastT < 1500 && !b.disabled) { busy(b, true); b._auto = true; LOAD.lastBtn = null; return b; }
+  return null;
+}
+function loadEnd(b) {
+  LOAD.n = Math.max(0, LOAD.n - 1);
+  if (!LOAD.n) { document.body.classList.remove('busy'); $('loadbar').style.display = 'none'; }
+  if (b && b._auto && document.body.contains(b)) { b._auto = false; busy(b, false); }
+}
 function api(action, data) {
   var body = Object.assign({ action: action, pin: S.pin, user: S.user }, data || {});
+  var b = loadStart();
   return fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })
     .then(function (r) { return r.json(); })
-    .then(function (j) { if (!j.ok) throw new Error(j.error || 'Request failed'); return j; });
+    .then(function (j) { loadEnd(b); if (!j.ok) throw new Error(j.error || 'Request failed'); return j; },
+      function (e) { loadEnd(b); throw new Error('Connection problem, please try again'); });
 }
-function busy(btn, on) { if (!btn) return; if (on) { btn._t = btn.textContent; btn.textContent = 'Working…'; btn.disabled = true; } else { btn.textContent = btn._t || btn.textContent; btn.disabled = false; } }
+function busy(btn, on) {
+  if (!btn) return;
+  if (on) { if (btn._busy) return; btn._busy = true; btn._t = btn.innerHTML; btn.innerHTML = '<span class="spin"></span>Working…'; btn.disabled = true; }
+  else { if (!btn._busy) return; btn._busy = false; btn.innerHTML = btn._t; btn.disabled = false; }
+}
 
 function openModal(html) { $('modal').innerHTML = html; $('modalBg').style.display = 'flex'; }
 function closeModal() { stopScanner(); $('modalBg').style.display = 'none'; $('modal').innerHTML = ''; }
